@@ -10,13 +10,11 @@ from wig.classes.output import OutputJSON
 from pymongo import MongoClient
 from multiprocessing import Pool
 
-# a piece of the dotfile search bit -- TODO make this more dynamic.
-# xdg-settings, whatever on mac. Also implement CL args
-CONFIG_PATH    = os.path.expanduser("~/.config/prospectinator/")
-if not os.path.exists(CONFIG_PATH):
-        os.makedirs(CONFIG_PATH)
+config_path    = os.path.expanduser("~/.config/prospectinator/")
+if not os.path.exists(config_path):
+        os.makedirs(config_path)
 
-with open(CONFIG_PATH + 'prospectinator.json', 'r') as defaults_file:    
+with open(config_path + 'prospectinator.json', 'r') as defaults_file:    
     defaults = json.load(defaults_file)
 
 gmaps_apikey  =  defaults["gmaps_apikey"]
@@ -34,6 +32,17 @@ response  = json.loads(urllib.request.urlopen(query_url).read().decode('utf-8'))
 ids        = [result["place_id"] for result in response["results"]]
 place_url  = "https://maps.googleapis.com/maps/api/place/details/json?placeid=%s&key=%s"
 
+
+def url_to_hostname(url):
+    hostname = re.sub(r'\/.*$', '',  re.sub(r'^http.?:\/\/', '', url))
+    return hostname
+
+def host_is_up(hostname):
+    response = os.system("ping -c 1 -w2 " + hostname + " > /dev/null 2>&1")
+    if response == 0:
+        return True
+    return False
+
 def run_fingerprint(place_id):
     client = MongoClient(dbhost, dbport)
     db     = client.prospectinator
@@ -43,8 +52,9 @@ def run_fingerprint(place_id):
 
     # retrieve a record by the place id. If it is not present, create a new one.
     place_doc = places.find_one({'result.place_id' : place_id}) or json.loads(urllib.request.urlopen(query_url).read().decode('utf-8'))
-    if 'website' in place_doc['result']:
-        if 'fingerprint' not in place_doc:
+    if 'website' in place_doc['result']: 
+        if 'fingerprint' not in place_doc and host_is_up(url_to_hostname(place_doc['result']['website'])):
+            print("scanning url %-40s for place ID %s" % (place_doc['result']['website'], place_id))
             w = wig(url = place_doc['result']['website'])
             w.run()
             results = OutputJSON(w.options, w.data)
