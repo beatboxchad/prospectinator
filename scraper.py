@@ -17,15 +17,8 @@ CONFIG_PATH    = os.path.expanduser("~/.config/prospectinator/")
 if not os.path.exists(CONFIG_PATH):
         os.makedirs(CONFIG_PATH)
 
-CACHE = open(CONFIG_PATH + "cache.json", 'r')
-
 with open(CONFIG_PATH + 'prospectinator.json', 'r') as defaults_file:    
     defaults = json.load(defaults_file)
-
-try: 
-    places = json.load(CACHE)
-except:
-    places = {}
 
 gmaps_apikey  =  defaults["gmaps_apikey"]
 location      =  defaults["location"]
@@ -34,6 +27,8 @@ dbport        =  defaults["dbport"]
 
 client  =  MongoClient(dbhost, dbport)
 DB      =  client.prospectinator
+
+coll    = DB.places
 
 # grab the list of places
 base_url  = "https://maps.googleapis.com/maps/api/place/radarsearch/json?location=%s&keyword=*&&radius=5000&key=%s"
