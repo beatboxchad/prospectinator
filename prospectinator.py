@@ -3,6 +3,7 @@ import json
 import urllib.request
 import os
 import re
+import socket
 
 from pprint import pprint
 from wig.wig import wig
@@ -10,17 +11,17 @@ from wig.classes.output import OutputJSON
 from pymongo import MongoClient
 from multiprocessing import Pool
 
-config_path    = os.path.expanduser("~/.config/prospectinator/")
+config_path = os.path.expanduser("~/.config/prospectinator/")
 if not os.path.exists(config_path):
         os.makedirs(config_path)
 
 with open(config_path + 'prospectinator.json', 'r') as defaults_file:    
     defaults = json.load(defaults_file)
 
-gmaps_apikey  =  defaults["gmaps_apikey"]
-location      =  defaults["location"]
-dbhost        =  defaults["dbhost"]
-dbport        =  defaults["dbport"]
+gmaps_apikey = defaults["gmaps_apikey"]
+location     = defaults["location"]
+dbhost       = defaults["dbhost"]
+dbport       = defaults["dbport"]
 
 
 # grab the list of places
@@ -37,11 +38,13 @@ def url_to_hostname(url):
     hostname = re.sub(r'\/.*$', '',  re.sub(r'^http.?:\/\/', '', url))
     return hostname
 
-def host_is_up(hostname):
-    response = os.system("ping -c 1 -w2 " + hostname + " > /dev/null 2>&1")
-    if response == 0:
+def site_is_up(url):
+    code = urllib.request.urlopen(url).getcode()
+    
+    if code // 100 in [2, 3]:
         return True
     return False
+
 
 def run_fingerprint(place_id):
     client = MongoClient(dbhost, dbport)
@@ -53,13 +56,13 @@ def run_fingerprint(place_id):
     # retrieve a record by the place id. If it is not present, create a new one.
     place_doc = places.find_one({'result.place_id' : place_id}) or json.loads(urllib.request.urlopen(query_url).read().decode('utf-8'))
     if 'website' in place_doc['result']: 
-        if 'fingerprint' not in place_doc and host_is_up(url_to_hostname(place_doc['result']['website'])):
+        if 'fingerprint' not in place_doc and site_is_up(place_doc['result']['website']):
             print("scanning url %-40s for place ID %s" % (place_doc['result']['website'], place_id))
             w = wig(url = place_doc['result']['website'])
             w.run()
             results = OutputJSON(w.options, w.data)
             results.add_results()
-            place_doc['fingerprint'] = results.json_data
+            place_doc['fingerprint'] = results.json_data[0]
             places.save(place_doc)
 
     return 
