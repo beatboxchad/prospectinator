@@ -40,7 +40,6 @@ def url_to_hostname(url):
 
 def site_is_up(url):
     code = urllib.request.urlopen(url).getcode()
-    
     if code // 100 in [2, 3]:
         return True
     return False
