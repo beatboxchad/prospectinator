@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import json
-import urllib.request
+import requests
 import os
 import re
 import socket
@@ -26,8 +26,8 @@ dbport       = defaults["dbport"]
 
 # grab the list of places
 base_url  = "https://maps.googleapis.com/maps/api/place/radarsearch/json?location=%s&keyword=*&&radius=5000&key=%s"
-query_url = urllib.request.Request(base_url % (location, gmaps_apikey))
-response  = json.loads(urllib.request.urlopen(query_url).read().decode('utf-8'))
+query_url = base_url % (location, gmaps_apikey)
+response = json.loads(requests.get(query_url).text)
 
 # now we get the details of each place.
 ids        = [result["place_id"] for result in response["results"]]
@@ -39,21 +39,17 @@ def url_to_hostname(url):
     return hostname
 
 def site_is_up(url):
-    code = urllib.request.urlopen(url).getcode()
-    if code // 100 in [2, 3]:
-        return True
-    return False
-
+    return requests.get(url).status_code // 100 in [2, 3]
 
 def run_fingerprint(place_id):
     client = MongoClient(dbhost, dbport)
     db     = client.prospectinator
     places = db.places
 
-    query_url = urllib.request.Request(place_url % (place_id, gmaps_apikey))
+    query_url = place_url % (place_id, gmaps_apikey)
 
     # retrieve a record by the place id. If it is not present, create a new one.
-    place_doc = places.find_one({'result.place_id' : place_id}) or json.loads(urllib.request.urlopen(query_url).read().decode('utf-8'))
+    place_doc = places.find_one({'result.place_id' : place_id}) or json.loads(requests.get(query_url).text)
     if 'website' in place_doc['result']: 
         if 'fingerprint' not in place_doc and site_is_up(place_doc['result']['website']):
             print("scanning url %-40s for place ID %s" % (place_doc['result']['website'], place_id))
